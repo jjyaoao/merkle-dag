@@ -5,6 +5,17 @@ import (
 	"hash"
 )
 
+const (
+	LIST_LIMIT  = 2048
+	BLOCK_LIMIT = 256 * 1024
+)
+
+const (
+	BLOB = "blob"
+	LIST = "list"
+	TREE = "tree"
+)
+
 type Link struct {
 	Name string
 	Hash []byte

@@ -8,102 +8,6 @@ import (
 	"testing"
 )
 
-type TestFile struct {
-	name string
-	data []byte
-}
-
-func (file *TestFile) Size() uint64 {
-	return uint64(len(file.data))
-}
-
-func (file *TestFile) Name() string {
-	return file.name
-}
-
-func (file *TestFile) Type() int {
-	return FILE
-}
-
-func (file *TestFile) Bytes() []byte {
-	return file.data
-}
-
-type testDirIter struct {
-	list []Node
-	iter int
-}
-
-func (iter *testDirIter) Next() bool {
-	if iter.iter+1 < len(iter.list) {
-		iter.iter += 1
-		return true
-	}
-	return false
-}
-
-func (iter *testDirIter) Node() Node {
-	return iter.list[iter.iter]
-}
-
-type TestDir struct {
-	list []Node
-	name string
-}
-
-func (dir *TestDir) Size() uint64 {
-	var len uint64 = 0
-	for i := range dir.list {
-		len += dir.list[i].Size()
-	}
-	return len
-}
-
-func (dir *TestDir) Name() string {
-	return dir.name
-}
-
-func (dir *TestDir) Type() int {
-	return DIR
-}
-
-func (dir *TestDir) It() DirIterator {
-	it := &testDirIter{
-		list: dir.list,
-		iter: -1,
-	}
-	return it
-}
-
-type HashMap struct {
-	mp map[string]([]byte)
-}
-
-func (hmp *HashMap) Has(key []byte) (bool, error) {
-	return hmp.mp[string(key)] != nil, nil
-}
-
-func (hmp *HashMap) Put(key, value []byte) error {
-	flag, _ := hmp.Has(key)
-	if flag {
-		panic("Key is same")
-	}
-	hmp.mp[string(key)] = value
-	return nil
-}
-
-func (hmp *HashMap) Get(key []byte) ([]byte, error) {
-	flag, _ := hmp.Has(key)
-	if !flag {
-		panic("Don't have the key")
-	}
-	return hmp.mp[string(key)], nil
-}
-
-func (hmp *HashMap) Delete(key []byte) error {
-	return nil
-}
-
 func TestDagStructure(t *testing.T) {
 	store := &HashMap{
 		mp: make(map[string][]byte),
@@ -166,6 +70,65 @@ func TestDagStructure(t *testing.T) {
 	}
 	rootHash = Add(store, directory, hasher)
 	fmt.Printf("%x\n", rootHash)
+}
+
+func TestDagToFile(t *testing.T) {
+	hashMapInstance := &HashMap{
+		mp: make(map[string][]byte),
+	}
+	hashFunc := sha256.New()
+
+	// 定义文件夹
+	folderPath := "D:\\Information\\作业=-=\\分布式\\merkle-dag"
+	filesInDir, _ := ioutil.ReadDir(folderPath)
+
+	directory := &TestDir{
+		list: make([]Node, len(filesInDir)),
+		name: "/",
+	}
+
+	for idx, fileItem := range filesInDir {
+		filePath := folderPath + "/" + fileItem.Name()
+
+		if fileItem.IsDir() {
+			dirContent := explore(filePath)
+			dirContent.name = fileItem.Name()
+			directory.list[idx] = dirContent
+		} else {
+			fileContent, err := os.ReadFile(filePath)
+			if err != nil {
+				t.Fatal(err)
+			}
+			fileNode := &TestFile{
+				name: fileItem.Name(),
+				data: fileContent,
+			}
+			directory.list[idx] = fileNode
+		}
+	}
+
+	rootHash := Add(hashMapInstance, directory, hashFunc)
+	fmt.Printf("%x\n", rootHash)
+
+	// Retrieve file from the DAG
+	bufferGo := Hash2File(hashMapInstance, rootHash, "/pkg/mod/bazil.org/fuse@v0.0.0-20200117225306-7b5117fecadc/buffer.go", nil)
+	fmt.Println(string(bufferGo))
+
+	// Retrieve a new folder from the DAG
+	newFolderContent := Hash2File(hashMapInstance, rootHash, "newfolder", nil)
+	originalContent, _ := os.ReadFile("D:\\Information\\作业=-=\\分布式\\merkle-dag\\newfolder")
+
+	hashFunc.Reset()
+	hashFunc.Write(originalContent)
+	hash1 := hashFunc.Sum(nil)
+
+	hashFunc.Reset()
+	hashFunc.Write(newFolderContent)
+	hash2 := hashFunc.Sum(nil)
+
+	fmt.Println(hash1)
+	fmt.Println(hash2)
+	fmt.Println(string(hash1) == string(hash2))
 }
 
 func explore(dirPath string) *TestDir {
